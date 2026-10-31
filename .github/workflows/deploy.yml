@@ -1,0 +1,30 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+    paths: ['server/**', 'src/**', 'public/**', 'index.html', 'package*.json', 'vite.config.js', 'deploy/**']
+  workflow_dispatch:
+
+concurrency: deploy
+
+jobs:
+  deploy:
+    # self-hosted runner installed on the server itself: no SSH key or open port needed
+    runs-on: self-hosted
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+      - run: npm run build
+      - name: Syntax check backend
+        run: for f in server/*.js; do node --check "$f"; done
+      - name: Deploy
+        run: |
+          rsync -a --delete --exclude data --exclude .cache dist server package.json "$HOME/filmtar/"
+          install -D deploy/filmtar.service "$HOME/.config/systemd/user/filmtar.service"
+          systemctl --user daemon-reload
+          systemctl --user restart filmtar
+          sleep 3
+          systemctl --user is-active filmtar
