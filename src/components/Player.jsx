@@ -100,7 +100,8 @@ export default function Player({ movie, startAt = 0, onClose }) {
     const v = video.current
     if (!v) return
     const off = []
-    const show = (t) => () => setCue([...t.activeCues].map((c) => clean(c.text)).join('\n'))
+    // activeCues is null until the track has loaded
+    const show = (t) => () => setCue(Array.from(t.activeCues ?? [], (c) => clean(c.text)).join('\n'))
     for (const t of v.textTracks) {
       // "hidden" still loads and times the cues; we draw them ourselves
       t.mode = t.language === sub ? 'hidden' : 'disabled'
