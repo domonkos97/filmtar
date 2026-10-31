@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react'
-import { assetUrl } from '../api/client'
+import { useEffect, useMemo, useState } from 'react'
+import { assetUrl, getOccasion } from '../api/client'
 import { directorsOf, decadeOf, progressInfo } from '../utils'
 import Ask from './Ask'
 import Detail from './Detail'
@@ -75,9 +75,23 @@ function Resume({ movie, info, onPlay }) {
 
 const still = (m) => assetUrl(m.still ?? m.thumb ?? m.poster)
 
+// survives page switches, like the picks do
+let memoryToday = null
+
 export default function Discover({ movies, progress, lists, actions, onChanged }) {
-  const { occ, date } = useMemo(() => ({ occ: occasionOf(), date: new Date().toLocaleDateString('hu-HU', { month: 'long', day: 'numeric' }) }), [])
-  const [mood, setMood] = useState(occ.mood)
+  const { local, date } = useMemo(() => ({ local: occasionOf(), date: new Date().toLocaleDateString('hu-HU', { month: 'long', day: 'numeric' }) }), [])
+  // what today is, as the AI sees it (holidays, observances, the days around them); the built-in calendar until it answers
+  const [today, setToday] = useState(memoryToday)
+  useEffect(() => {
+    if (today) return
+    let live = true
+    getOccasion(new Date().toLocaleDateString('sv')).then((o) => { if (o && live) { memoryToday = o; setToday(o) } })
+    return () => { live = false }
+  }, [])
+  const occ = useMemo(() => (today ? { ...local, name: today.name, sub: today.headline, mood: today.mood, ai: true } : local), [local, today])
+  const [chosen, setChosen] = useState(null)
+  const mood = chosen ?? occ.mood
+  const setMood = setChosen
   const [roll, setRoll] = useState(0) // bumped by every mood click: a fresh draw
   const [base] = useState(() => Math.floor(Math.random() * 1e9))
   const [openId, setOpenId] = useState(null)

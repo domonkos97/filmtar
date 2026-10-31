@@ -252,6 +252,8 @@ ol, ul { list-style: none; }
 .askchips button:hover:not(:disabled) { color: var(--blue); }
 .askchips button:hover:not(:disabled) svg { color: var(--blue); }
 .askchips button:disabled { opacity: .5; cursor: default; }
+.ask__why { max-width: 760px; margin-top: 14px; font-size: 17px; line-height: 1.45; color: #333; }
+.ask__why b { font-weight: 800; color: var(--ink); }
 .ask__error { margin-top: 14px; color: #a33; font-size: 15px; }
 .another { display: inline-flex; align-items: center; gap: 8px; font-size: 15px; color: #333; }
 .another:hover:not(:disabled) { color: var(--ink); }

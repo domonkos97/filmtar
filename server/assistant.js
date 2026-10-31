@@ -2,29 +2,11 @@
 // The library is sent as compact context on every request, so it can recommend what is
 // on the disk ("short but thrilling"), name similar films ("like The Thing") or look
 // things up ("what is the shortest film?").
-// A "lite" model: answers in ~1-2 s, where the big flash model was taking a minute or more
-// (and often 503ing). Override with GEMINI_ASSISTANT_MODEL.
-const MODEL = () => process.env.GEMINI_ASSISTANT_MODEL || 'gemini-3.5-flash-lite'
-const TIMEOUT_MS = 30000
+import { gemini } from './gemini.js'
+import { getOccasion } from './occasion.js'
+
 const MAX_TURNS = 20
 const MAX_CHARS = 2000
-
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
-
-// One Gemini call. The free tier answers 503/429 under load, so retry a couple of times.
-async function gemini(body) {
-  for (let attempt = 0; ; attempt++) {
-    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${MODEL()}:generateContent`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': process.env.GEMINI_API_KEY.trim() },
-      body: JSON.stringify(body),
-      signal: AbortSignal.timeout(TIMEOUT_MS),
-    })
-    if (res.ok) return res.json()
-    if (attempt < 2 && (res.status === 503 || res.status === 429)) { await sleep(1200 * (attempt + 1)); continue }
-    throw new Error(`Gemini ${res.status}: ${(await res.text()).slice(0, 200)}`)
-  }
-}
 
 const today = () => new Date().toLocaleDateString('hu-HU', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' })
 
@@ -86,7 +68,7 @@ Choose exactly 3 DIFFERENT films from the list below and refer to them by the id
 For each pick write "reason": ONE Hungarian sentence (max ~140 characters) saying concretely why it fits THIS request: mood, pace, runtime, who is watching. No spoilers, don't repeat the title, no filler like "remek film".
 Rules:
 - The user's request always wins. Hard limits (maximum runtime, who watches, "not horror") must be respected.
-- Today's context (date, holiday, season, weekday) is only given when the user asked for nothing specific. Then let it steer the picks and say so in the reason where natural. If a request is given, ignore the date completely unless the request itself mentions it.
+- Today's context (a holiday, observance, season or weekday, with the kind of films that fit) is only given when the user asked for nothing specific. Then it decides the picks: every film must clearly fit that theme, and each reason says concretely how the film connects to it (the topic, mood, or what the day is about). If a request is given, ignore the date completely unless the request itself mentions it.
 - Every genre, mood or tone named in the request is a hard requirement: "funny" means comedies, "light" means no horror or heavy drama, "scary" means horror/thrillers.
 - Prefer films marked "unseen" or "started" unless the user asks for something they know.
 - When a refinement is given (lighter, shorter, bolder...) change the previous three accordingly and keep what still fits.
@@ -104,7 +86,9 @@ export async function recommend(input, movies, progress) {
   const query = clip(input.query, 400)
   const refine = clip(input.refine, 200)
   // the date only matters when the user asked for nothing: otherwise "Halloween" hijacks "something funny"
-  const context = query ? '' : clip(input.context, 300)
+  let occasion = null
+  if (!query) occasion = await getOccasion(input.date)
+  const context = query ? '' : occasion ? `${occasion.name}. ${occasion.theme}` : clip(input.context, 300)
   if (!query && !refine && !context) throw Object.assign(new Error('need a request'), { status: 400 })
 
   const title = (id) => known.get(id).title
@@ -142,5 +126,5 @@ export async function recommend(input, movies, progress) {
     .filter((p) => known.has(p?.id) && !seen.has(p.id) && seen.add(p.id)) // only real library films, once each
     .map((p) => ({ id: p.id, reason: clip(p.reason, 220) }))
   if (!picks.length) throw new Error('Gemini returned no usable picks')
-  return picks
+  return { picks, occasion }
 }

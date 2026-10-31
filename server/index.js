@@ -4,6 +4,7 @@ import path from 'node:path'
 import { askAssistant, hasAssistant, recommend } from './assistant.js'
 import { setChoice } from './choices.js'
 import { createCollection, getLists, setInCollection, setWatchlist } from './lists.js'
+import { getOccasion } from './occasion.js'
 import { buildLibrary } from './home.js'
 import { getFile, getLibrary } from './library.js'
 import { getProgress, setProgress } from './progress.js'
@@ -56,12 +57,17 @@ async function handle(req, res) {
     if (!hasAssistant()) return send(res, 503, { error: 'GEMINI_API_KEY is not set' })
     const body = await readJson(req)
     try {
-      return send(res, 200, { picks: await recommend(body, await getLibrary(MOVIES_DIR), getProgress()) })
+      return send(res, 200, await recommend(body, await getLibrary(MOVIES_DIR), getProgress()))
     } catch (err) {
       if (err.status === 400) return send(res, 400, { error: err.message })
       console.warn(`[recommend] ${err.message}`)
       return send(res, 502, { error: 'assistant unavailable' })
     }
+  }
+
+  if (pathname === '/api/occasion' && req.method === 'GET') {
+    const date = new URL(req.url, 'http://x').searchParams.get('date')
+    return send(res, 200, (await getOccasion(date)) ?? null)
   }
 
   const sub = pathname.match(/^\/api\/movies\/([^/]+)\/subtitles(?:\/([A-Za-z-]+))?$/)

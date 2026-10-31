@@ -63,7 +63,8 @@ export default function Ask({ movies, occ, lists, actions, onOpen, fallback }) {
   const [busy, setBusy] = useState(!memory)
   const [error, setError] = useState(null) // null | message
   const [hint, setHint] = useState(0)
-  const asked = useRef(memory?.asked ?? occ.ask) // the request the current picks answer
+  const [daily, setDaily] = useState(memory?.daily ?? true) // the picks are today's own, not an answer to a request
+  const asked = useRef(memory?.asked ?? '') // the request the current picks answer ('' = today's occasion)
   const shown = useRef(memory?.shown ?? []) // ids already shown for it, so "other three" never repeats
 
   useEffect(() => {
@@ -75,7 +76,7 @@ export default function Ask({ movies, occ, lists, actions, onOpen, fallback }) {
   const byId = useMemo(() => new Map(movies.map((m) => [m.id, m])), [movies])
   const toPicks = (raw) => raw.filter((p) => byId.has(p.id)).map((p) => ({ movie: byId.get(p.id), reason: p.reason }))
 
-  useEffect(() => { if (picks.length) memory = { text, picks, asked: asked.current, shown: shown.current } })
+  useEffect(() => { if (picks.length) memory = { text, picks, asked: asked.current, shown: shown.current, daily } })
 
   async function run(query, refine) {
     const previous = refine ? picks.map((p) => p.movie.id) : []
@@ -84,7 +85,8 @@ export default function Ask({ movies, occ, lists, actions, onOpen, fallback }) {
     setBusy(true)
     setError(null)
     try {
-      const { picks: raw } = await recommend({ query, refine, previous, exclude: shown.current, context: `${occ.name}: ${occ.sub}` })
+      const { picks: raw } = await recommend({ query, refine, previous, exclude: shown.current, date: dayKey(), context: `${occ.name}: ${occ.sub}` })
+      setDaily(!query)
       const next = toPicks(raw)
       if (!next.length) throw new Error('no picks')
       shown.current = [...shown.current, ...next.map((p) => p.movie.id)].slice(-12)
@@ -112,7 +114,7 @@ export default function Ask({ movies, occ, lists, actions, onOpen, fallback }) {
     const cached = cache.read(`ideas:${key}`)
     if (Array.isArray(cached) && toPicks(cached).length) return done(cached)
     if (auto.key !== key) {
-      const promise = recommend({ query: occ.ask, context: `${occ.name}: ${occ.sub}` })
+      const promise = recommend({ query: '', date: key, context: `${occ.name}: ${occ.sub}` })
         .then(({ picks: raw }) => { cache.write(`ideas:${key}`, raw); return raw })
         .catch((err) => { auto = { key: null, promise: null }; throw err })
       auto = { key, promise }
@@ -160,6 +162,8 @@ export default function Ask({ movies, occ, lists, actions, onOpen, fallback }) {
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-3-6.7M21 4v5h-5" /></svg>
           </button>
         </div>
+
+        {daily && occ.ai && picks.length > 0 && <p className="ask__why"><b>{occ.name}.</b> {occ.sub}</p>}
 
         {error && <p className="ask__error">{error}</p>}
 
