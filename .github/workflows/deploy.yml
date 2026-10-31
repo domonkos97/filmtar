@@ -3,7 +3,7 @@ name: Deploy
 on:
   push:
     branches: [main]
-    paths: ['server/**', 'src/**', 'public/**', 'index.html', 'package*.json', 'vite.config.js', 'deploy/**']
+    paths: ['server/**', 'src/**', 'public/**', 'index.html', 'package*.json', 'vite.config.js', 'deploy/**', '.github/workflows/deploy.yml']
   workflow_dispatch:
 
 concurrency: deploy
@@ -21,6 +21,9 @@ jobs:
       - name: Syntax check backend
         run: for f in server/*.js; do node --check "$f"; done
       - name: Deploy
+        env:
+          # the runner is a system service: point systemctl --user at domi's session bus
+          XDG_RUNTIME_DIR: /run/user/1000
         run: |
           rsync -a --delete --exclude data --exclude .cache dist server package.json "$HOME/filmtar/"
           install -D deploy/filmtar.service "$HOME/.config/systemd/user/filmtar.service"
