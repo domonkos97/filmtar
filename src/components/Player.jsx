@@ -11,6 +11,11 @@ const clock = (s) => {
 // Full-screen player for a local film, with our own controls. Esc or "Vissza" closes it.
 // Remembers how far you got (saved every few seconds) and picks up from there (`startAt`, seconds).
 // Keys: space/k play, ←/→ ±10 s, ↑/↓ volume, m mute, f fullscreen, c subtitles.
+// subtitles sit a few lines above the bottom edge, clear of the controls
+const lift = (track) => {
+  for (const c of track?.cues ?? []) { c.snapToLines = true; c.line = -4 }
+}
+
 export default function Player({ movie, startAt = 0, onClose }) {
   const [error, setError] = useState(false)
   const [idle, setIdle] = useState(false)
@@ -84,7 +89,10 @@ export default function Player({ movie, startAt = 0, onClose }) {
   useEffect(() => {
     const v = video.current
     if (!v) return
-    for (const t of v.textTracks) t.mode = t.language === sub ? 'showing' : 'disabled'
+    for (const t of v.textTracks) {
+      t.mode = t.language === sub ? 'showing' : 'disabled'
+      lift(t)
+    }
   }, [sub, subs])
 
   // controls fade out while the mouse is still and the film is playing
@@ -137,7 +145,7 @@ export default function Player({ movie, startAt = 0, onClose }) {
         onProgress={onProgress}
         onError={() => setError(true)}
       >
-        {subs.map((s) => <track key={s.lang} kind="subtitles" src={subtitleUrl(movie.id, s.lang)} srcLang={s.lang} label={s.label} />)}
+        {subs.map((s) => <track key={s.lang} kind="subtitles" src={subtitleUrl(movie.id, s.lang)} srcLang={s.lang} label={s.label} onLoad={(e) => lift(e.currentTarget.track)} />)}
       </video>
 
       <div className="player__bar">
