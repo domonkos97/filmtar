@@ -67,3 +67,6 @@ export const saveProgress = (id, position, duration) =>
 
 // body: { query, refine?, previous?: [id], exclude?: [id], context? } -> { picks: [{ id, reason }] }
 export const recommend = (body) => send('POST', '/recommend', body)
+
+export const subtitleUrl = (id, lang) => `${API_URL}/movies/${encodeURIComponent(id)}/subtitles/${encodeURIComponent(lang)}`
+export const getSubtitles = (id) => fetch(`${API_URL}/movies/${encodeURIComponent(id)}/subtitles`).then((r) => (r.ok ? r.json() : []), () => [])

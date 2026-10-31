@@ -7,12 +7,16 @@ import { createCollection, getLists, setInCollection, setWatchlist } from './lis
 import { buildLibrary } from './home.js'
 import { getFile, getLibrary } from './library.js'
 import { getProgress, setProgress } from './progress.js'
+import { listSubtitles, readSubtitle } from './subtitles.js'
 import { serveStatic } from './static.js'
 import { streamFile } from './stream.js'
 import { getImages, hasKey } from './tmdb.js'
 
 const PORT = Number(process.env.PORT) || 4000
 const MOVIES_DIR = path.resolve((process.env.MOVIES_DIR || path.join(os.homedir(), 'Movies')).replace(/^~/, os.homedir()))
+
+// subtitles/<film id>/<lang>.vtt, by default a sibling of the movies folder
+const SUBTITLES_DIR = path.resolve((process.env.SUBTITLES_DIR || path.join(MOVIES_DIR, '..', 'subtitles')).replace(/^~/, os.homedir()))
 
 const PATH_RE = /^\/[A-Za-z0-9_-]+\.(jpg|png)$/ // a TMDB file path, nothing else
 const KINDS = ['poster', 'still', 'logo']
@@ -58,6 +62,18 @@ async function handle(req, res) {
       console.warn(`[recommend] ${err.message}`)
       return send(res, 502, { error: 'assistant unavailable' })
     }
+  }
+
+  const sub = pathname.match(/^\/api\/movies\/([^/]+)\/subtitles(?:\/([A-Za-z-]+))?$/)
+  if (sub && req.method === 'GET') {
+    const id = decodeURIComponent(sub[1])
+    if (!ID_RE.test(id)) return send(res, 400, { error: 'invalid id' })
+    if (!sub[2]) return send(res, 200, await listSubtitles(SUBTITLES_DIR, id))
+    const vtt = await readSubtitle(SUBTITLES_DIR, id, sub[2])
+    if (vtt == null) return send(res, 404, { error: 'no such subtitle' })
+    res.setHeader('Content-Type', 'text/vtt; charset=utf-8')
+    res.setHeader('Cache-Control', 'public, max-age=3600')
+    return res.end(vtt)
   }
 
   const m = pathname.match(/^\/api\/movies\/([^/]+)\/(images|choice|stream)$/)
