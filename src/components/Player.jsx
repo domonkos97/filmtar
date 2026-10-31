@@ -11,9 +11,18 @@ const clock = (s) => {
 // Full-screen player for a local film, with our own controls. Esc or "Vissza" closes it.
 // Remembers how far you got (saved every few seconds) and picks up from there (`startAt`, seconds).
 // Keys: space/k play, ←/→ ±10 s, ↑/↓ volume, m mute, f fullscreen, c subtitles.
-// subtitles sit a few lines above the bottom edge, clear of the controls
-const lift = (track) => {
-  for (const c of track?.cues ?? []) { c.snapToLines = true; c.line = -4 }
+// "{\an8}"-style position tags and html entities are not wanted in our own subtitle layer
+const clean = (t) => t.replace(/\{\\[^}]*\}/g, '').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&nbsp;/g, ' ')
+
+// one subtitle line, with <i> kept as italics and every other tag dropped
+function Line({ text }) {
+  let italic = false
+  return text.split(/(<\/?i>|<[^>]+>)/g).map((part, i) => {
+    if (/^<i>$/i.test(part)) { italic = true; return null }
+    if (/^<\/i>$/i.test(part)) { italic = false; return null }
+    if (part.startsWith('<')) return null
+    return part ? (italic ? <em key={i}>{part}</em> : part) : null
+  })
 }
 
 export default function Player({ movie, startAt = 0, onClose }) {
@@ -29,6 +38,7 @@ export default function Player({ movie, startAt = 0, onClose }) {
   const [sub, setSub] = useState(() => localStorage.getItem('sub') ?? '') // '' = off
   const [menu, setMenu] = useState(false)
   const [full, setFull] = useState(false)
+  const [cue, setCue] = useState('') // the subtitle on screen now
   const [hover, setHover] = useState(null) // { x, t } over the progress bar
   const timer = useRef(null)
   const video = useRef(null)
@@ -89,10 +99,15 @@ export default function Player({ movie, startAt = 0, onClose }) {
   useEffect(() => {
     const v = video.current
     if (!v) return
+    const off = []
+    const show = (t) => () => setCue([...t.activeCues].map((c) => clean(c.text)).join('\n'))
     for (const t of v.textTracks) {
-      t.mode = t.language === sub ? 'showing' : 'disabled'
-      lift(t)
+      // "hidden" still loads and times the cues; we draw them ourselves
+      t.mode = t.language === sub ? 'hidden' : 'disabled'
+      if (t.language === sub) { const f = show(t); t.addEventListener('cuechange', f); off.push(() => t.removeEventListener('cuechange', f)); f() }
     }
+    if (!sub) setCue('')
+    return () => off.forEach((f) => f())
   }, [sub, subs])
 
   // controls fade out while the mouse is still and the film is playing
@@ -145,8 +160,14 @@ export default function Player({ movie, startAt = 0, onClose }) {
         onProgress={onProgress}
         onError={() => setError(true)}
       >
-        {subs.map((s) => <track key={s.lang} kind="subtitles" src={subtitleUrl(movie.id, s.lang)} srcLang={s.lang} label={s.label} onLoad={(e) => lift(e.currentTarget.track)} />)}
+        {subs.map((s) => <track key={s.lang} kind="subtitles" src={subtitleUrl(movie.id, s.lang)} srcLang={s.lang} label={s.label} />)}
       </video>
+
+      {sub && cue && (
+        <div className="psub" data-low={!showControls} aria-live="off">
+          {cue.split('\n').map((l, i) => <p key={i}><Line text={l} /></p>)}
+        </div>
+      )}
 
       <div className="player__bar">
         <button onClick={finish}><ChevronLeft width={20} height={20} /> Vissza</button>
